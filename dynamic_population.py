@@ -4,6 +4,7 @@ import os
 import networkx as nx
 import matplotlib.pyplot as plt
 from cascade_sim import  simulate_cascade
+from vis_graph import interactive_graph, plot_graph
 
 
 # ---------------------------------------------------------------------
@@ -187,6 +188,20 @@ def main():
             print(f"[WARN] Missing COVID parameters: {', '.join(missing)}")
         else:
             print("[INFO] Running COVID test mode (no simulation yet).")
+            
+    history, final_adopted = simulate_cascade(
+        G,
+        seeds=initiators,
+        q=args.threshold
+    )
+
+    # For interactive graph animation:
+    if args.interactive:
+        interactive_graph(G, history)
+
+    # For summary plot at the end:
+    if args.plot:
+        plot_graph(history, save_path="infection_curve.png")
 
     print(f"Graph file:          {args.graph_file}")
     print(f"Loaded graph:        {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
