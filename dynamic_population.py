@@ -3,6 +3,7 @@ import argparse
 import os
 import networkx as nx
 import matplotlib.pyplot as plt
+from cascade_sim import  simulate_cascade
 
 
 # ---------------------------------------------------------------------
@@ -152,11 +153,25 @@ def main():
     # Parse initiators
     initiators = parse_initiators(args.initiator)
 
-    # Basic validation depending on action
     if args.action == "cascade":
         if args.threshold is None:
             print("[WARN] --threshold is missing for cascade action.")
-        print("[INFO] Running in CASCADE test mode (no simulation yet).")
+        else:
+            print("[INFO] Running CASCADE test...")
+
+            # --- Run cascade simulation ---
+            history, final_adopted = simulate_cascade(
+                G,
+                seeds=initiators,
+                q=args.threshold
+            )
+
+            print("\n=== CASCADE SIMULATION RESULT ===")
+            for r, nodes in enumerate(history):
+                print(f"Round {r}: {sorted(nodes)}")
+            print(f"\nFinal adopted set ({len(final_adopted)} nodes): {sorted(final_adopted)}")
+            print("=================================\n")
+
 
     if args.action == "covid":
         missing = []
@@ -170,7 +185,8 @@ def main():
             missing.append("--vaccination")
         if missing:
             print(f"[WARN] Missing COVID parameters: {', '.join(missing)}")
-        print("[INFO] Running in COVID test mode (no simulation yet).")
+        else:
+            print("[INFO] Running COVID test mode (no simulation yet).")
 
     print(f"Graph file:          {args.graph_file}")
     print(f"Loaded graph:        {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
