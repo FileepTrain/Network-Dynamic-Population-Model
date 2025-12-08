@@ -3,8 +3,10 @@ import argparse
 import os
 import networkx as nx
 import matplotlib.pyplot as plt
+import random
 from cascade_sim import  simulate_cascade
-from vis_graph import interactive_graph, plot_graph
+from sirs_sim import simulate_sirs
+from vis_graph import interactive_simulation, plot_simulation
 
 
 # ---------------------------------------------------------------------
@@ -33,6 +35,58 @@ def load_gml(path: str) -> nx.DiGraph:
         print("[WARN] Graph has no edges.")
 
     return G
+
+# ---------------------------------------------------------------------
+# FILE HANDLING
+# ---------------------------------------------------------------------
+def run_covid_simulation(G: nx.Graph, initiators, args):
+    """
+    Helper for the COVID/SIRS part of the assignment.
+
+    - Builds the immune set from vaccination + shelter, excluding initiators.
+    - Calls simulate_sirs with the right parameters.
+    - Returns (history, infected_ever, final_R, final_I, immune).
+    """
+    immune = set()
+    n = G.number_of_nodes()
+    nodes_list = list(G.nodes())
+
+    # Make sure we treat initiators as a set for fast lookup
+    initiators_set = set(initiators)
+
+    # Eligible nodes for vaccination/shelter: everyone except initiators
+    eligible_nodes = [node for node in nodes_list if node not in initiators_set]
+
+    # Vaccination: r fraction of the population becomes immune
+    if args.vaccination is not None and args.vaccination > 0:
+        target_vaccinated = int(args.vaccination * n)
+        if target_vaccinated > 0 and eligible_nodes:
+            k = min(target_vaccinated, len(eligible_nodes))
+            vaccinated = set(random.sample(eligible_nodes, k))
+            immune |= vaccinated
+
+    # Shelter: s fraction of the population becomes immune / non-participatory
+    if args.shelter is not None and args.shelter > 0:
+        target_shelter = int(args.shelter * n)
+        if target_shelter > 0 and eligible_nodes:
+            k = min(target_shelter, len(eligible_nodes))
+            sheltered = set(random.sample(eligible_nodes, k))
+            immune |= sheltered
+
+    # Use a default if probability_of_death is not provided
+    death_prob = args.probability_of_death if args.probability_of_death is not None else 0.1
+
+    # Run SIRS simulation (assignment's "COVID" model)
+    history, infected_ever, final_R, final_I = simulate_sirs(
+        G,
+        seeds=initiators,
+        immune=immune,
+        probability_of_infection=args.probability_of_infection,
+        probability_of_death=death_prob,
+        max_steps=args.lifespan,
+    )
+
+    return history, infected_ever, final_R, final_I, immune
 
 
 # ---------------------------------------------------------------------
@@ -144,37 +198,56 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    # ------------------------------------------------------------
     # Load the graph
+    # ------------------------------------------------------------
     try:
         G = load_gml(args.graph_file)
     except (FileNotFoundError, nx.NetworkXError) as e:
         print(e)
         return
 
-    # Parse initiators
+    # Parse initiators (keep as strings for GML)
     initiators = parse_initiators(args.initiator)
 
+    # ------------------------------------------------------------
+    # CASCADE ACTION
+    # ------------------------------------------------------------
     if args.action == "cascade":
+
         if args.threshold is None:
-            print("[WARN] --threshold is missing for cascade action.")
-        else:
-            print("[INFO] Running CASCADE test...")
+            print("[ERROR] --threshold is required for cascade action.")
+            return
 
-            # --- Run cascade simulation ---
-            history, final_adopted = simulate_cascade(
-                G,
-                seeds=initiators,
-                q=args.threshold
-            )
+        print("[INFO] Running cascade simulation...")
 
-            print("\n=== CASCADE SIMULATION RESULT ===")
-            for r, nodes in enumerate(history):
-                print(f"Round {r}: {sorted(nodes)}")
-            print(f"\nFinal adopted set ({len(final_adopted)} nodes): {sorted(final_adopted)}")
-            print("=================================\n")
+        history, final_adopted = simulate_cascade(
+            G,
+            seeds=initiators,
+            q=args.threshold
+        )
+
+        # Print results
+        print("\n=== CASCADE SIMULATION RESULT ===")
+        for r, nodes in enumerate(history):
+            print(f"Round {r}: {sorted(nodes)}")
+        print(f"\nFinal adopted count: {len(final_adopted)}")
+        print("=================================\n")
+
+        # Interactive visualization
+        if args.interactive:
+            interactive_simulation(G, history, sim_type="cascade")
+
+        # Plot curve
+        if args.plot:
+            plot_simulation(history, sim_type="cascade", save_path="cascade_curve.png")
 
 
-    if args.action == "covid":
+    # ------------------------------------------------------------
+    # COVID ACTION (SIRS model)
+    # ------------------------------------------------------------
+    elif args.action == "covid":
+
         missing = []
         if args.probability_of_infection is None:
             missing.append("--probability_of_infection")
@@ -184,30 +257,43 @@ def main():
             missing.append("--shelter")
         if args.vaccination is None:
             missing.append("--vaccination")
+
         if missing:
-            print(f"[WARN] Missing COVID parameters: {', '.join(missing)}")
-        else:
-            print("[INFO] Running COVID test mode (no simulation yet).")
-            
-    history, final_adopted = simulate_cascade(
-        G,
-        seeds=initiators,
-        q=args.threshold
-    )
+            print(f"[ERROR] Missing required COVID parameters: {', '.join(missing)}")
+            return
 
-    # For interactive graph animation:
-    if args.interactive:
-        interactive_graph(G, history)
+        print("[INFO] Running COVID (SIRS) simulation...")
 
-    # For summary plot at the end:
-    if args.plot:
-        plot_graph(history, save_path="infection_curve.png")
+        history, infected_ever, final_R, final_I, immune = run_covid_simulation(
+            G,
+            initiators=initiators,
+            args=args,
+        )
 
+        # Print basic outcomes
+        print("\n=== COVID / SIRS SIMULATION RESULT ===")
+        print(f"Immune at start (vaccinated + sheltered): {len(immune)}")
+        print(f"Total ever infected:                      {len(infected_ever)}")
+        print(f"Final infected (I):                       {len(final_I)}")
+        print(f"Final recovered/removed (R):              {len(final_R)}")
+        print("=====================================\n")
+
+        # Interactive visualization
+        if args.interactive:
+            interactive_simulation(G, history, sim_type="sirs")
+
+        # Plot curve
+        if args.plot:
+            plot_simulation(history, sim_type="sirs", save_path="sirs_curve.png")
+
+    # ------------------------------------------------------------
+    # Print argument diagnostics for grading
+    # ------------------------------------------------------------
+    print("============ ARGUMENTS CHECK ============")
     print(f"Graph file:          {args.graph_file}")
     print(f"Loaded graph:        {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     print(f"Action:              {args.action}")
-    print(f"Initiators (raw):    {args.initiator}")
-    print(f"Initiators (parsed): {initiators}")
+    print(f"Initiators:          {initiators}")
     print(f"Threshold:           {args.threshold}")
     print(f"P(infection):        {args.probability_of_infection}")
     print(f"P(death):            {args.probability_of_death}")
@@ -217,6 +303,7 @@ def main():
     print(f"Interactive:         {args.interactive}")
     print(f"Plot:                {args.plot}")
     print("=========================================")
+
 
 if __name__ == "__main__":
     main()
