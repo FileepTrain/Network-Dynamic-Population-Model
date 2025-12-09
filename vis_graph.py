@@ -11,7 +11,7 @@ def _infer_sim_type(history, sim_type):
     Infer sim_type from history if not explicitly provided.
 
     - 'cascade' if history[0] is a set
-    - 'sirs' if history[0] is a dict with keys S, I, R
+    - 'sirs' if history[0] is a dict with keys S, I, R (and optionally D)
     """
     if sim_type is not None:
         return sim_type.lower()
@@ -96,53 +96,61 @@ def _draw_cascade_final(G, pos, ax, infected_so_far):
 
 
 def _draw_sirs_frame(G, pos, ax, state, step_idx):
-    """Draw a single SIRS frame."""
+    """Draw a single SIRS frame (supports optional death state D)."""
     S = state["S"]
     I = state["I"]
     R = state["R"]
+    D = state.get("D", set())
 
     ax.clear()
 
     node_colors = []
     for n in G.nodes():
-        if n in I:
-            node_colors.append("red")
+        if n in D:
+            node_colors.append("black")       # dead
+        elif n in I:
+            node_colors.append("red")         # infected
         elif n in R:
-            node_colors.append("green")
+            node_colors.append("green")       # recovered/immune
         else:
-            node_colors.append("lightgray")
+            node_colors.append("lightgray")   # susceptible
 
     nx.draw_networkx_edges(
-        G, pos,
+        G,
+        pos,
         edge_color="lightgray",
         width=1.5,
         alpha=0.7,
-        ax=ax
+        ax=ax,
     )
     nx.draw_networkx_nodes(
-        G, pos,
+        G,
+        pos,
         node_color=node_colors,
         node_size=450,
-        ax=ax
+        ax=ax,
     )
     nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
 
     ax.set_title(
-        f"Step {step_idx} | S={len(S)}  I={len(I)}  R={len(R)} (SIRS)"
+        f"Step {step_idx} | S={len(S)}  I={len(I)}  R={len(R)}  D={len(D)} (SIRS)"
     )
     ax.axis("off")
 
 
 def _draw_sirs_final(G, pos, ax, final_state):
-    """Draw final SIRS summary frame."""
+    """Draw final SIRS summary frame (supports optional death state D)."""
     final_S = final_state["S"]
     final_I = final_state["I"]
     final_R = final_state["R"]
+    final_D = final_state.get("D", set())
 
     ax.clear()
     final_colors = []
     for n in G.nodes():
-        if n in final_I:
+        if n in final_D:
+            final_colors.append("black")
+        elif n in final_I:
             final_colors.append("red")
         elif n in final_R:
             final_colors.append("green")
@@ -150,22 +158,24 @@ def _draw_sirs_final(G, pos, ax, final_state):
             final_colors.append("lightgray")
 
     nx.draw_networkx_edges(
-        G, pos,
+        G,
+        pos,
         edge_color="lightgray",
         width=1.5,
         alpha=0.7,
-        ax=ax
+        ax=ax,
     )
     nx.draw_networkx_nodes(
-        G, pos,
+        G,
+        pos,
         node_color=final_colors,
         node_size=450,
-        ax=ax
+        ax=ax,
     )
     nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
 
     ax.set_title(
-        f"Final SIRS State | S={len(final_S)}  I={len(final_I)}  R={len(final_R)}"
+        f"Final SIRS State | S={len(final_S)}  I={len(final_I)}  R={len(final_R)}  D={len(final_D)}"
     )
     ax.axis("off")
 
@@ -224,6 +234,7 @@ def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
         S = state["S"]
         I = state["I"]
         R = state["R"]
+        D = state.get("D", set())
 
         # draw frame
         _draw_sirs_frame(G, pos, ax, state, t)
@@ -239,17 +250,35 @@ def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
         if t == 0:
             prev_I = set()
             prev_R = set()
+            prev_D = set()
         else:
             prev_I = history[t - 1]["I"]
             prev_R = history[t - 1]["R"]
+            prev_D = history[t - 1].get("D", set())
 
-        new_infections = I - prev_I - prev_R
-        new_deaths = R - prev_R  # newly moved into R this step
+        # newly infected: in current I but not previously I/R/D
+        new_infections = I - prev_I - prev_R - prev_D
+
+        # newly dead: in current D but not previous D
+        new_deaths = D - prev_D
+
+        # newly recovered (optional, useful with explicit R vs D)
+        new_recoveries = R - prev_R
 
         print(f"[Step {t}]")
-        print(f"  S = {len(S)}, I = {len(I)}, R = {len(R)}")
-        print(f"  New infections this step: {len(new_infections)} -> {sorted(new_infections)}")
-        print(f"  New deaths/recoveries this step: {len(new_deaths)} -> {sorted(new_deaths)}\n")
+        print(f"  S = {len(S)}, I = {len(I)}, R = {len(R)}, D = {len(D)}")
+        print(
+            f"  New infections this step: {len(new_infections)}"
+            f" -> {sorted(new_infections)}"
+        )
+        print(
+            f"  New recoveries this step: {len(new_recoveries)}"
+            f" -> {sorted(new_recoveries)}"
+        )
+        print(
+            f"  New deaths this step:     {len(new_deaths)}"
+            f" -> {sorted(new_deaths)}\n"
+        )
 
         if t < len(history) - 1:
             user_input = input(
@@ -279,7 +308,8 @@ def interactive_simulation(G: nx.Graph, history, sim_type: str = None, save_pref
         history[r] = set of newly infected nodes at round r.
 
     For 'sirs':
-        history[t] = {'S': set(...), 'I': set(...), 'R': set(...)}.
+        history[t] = {'S': set(...), 'I': set(...), 'R': set(...)}
+                     or {'S': ..., 'I': ..., 'R': ..., 'D': ...}.
     """
     if not history:
         print("[interactive_simulation] Empty history; nothing to display.")
@@ -322,8 +352,8 @@ def _compute_sirs_series(history):
     Return (rounds, new_infections, cum_ever, deaths_cum) for SIRS.
 
     - new_infections[t]: newly infected at step t
-    - cum_ever[t]: number of nodes ever infected by step t
-    - deaths_cum[t]: cumulative deaths/removals = |R_t|
+    - cum_ever[t]: number of nodes ever infected/affected by step t
+    - deaths_cum[t]: cumulative deaths = |D_t| (or |R_t| if D not present)
     """
     T = len(history)
     rounds = list(range(T))
@@ -337,18 +367,21 @@ def _compute_sirs_series(history):
     for t in range(T):
         I_t = history[t]["I"]
         R_t = history[t]["R"]
+        # If 'D' is missing (old runs), treat D_t as R_t for compatibility
+        D_t = history[t].get("D", R_t)
 
         if t == 0:
             new_t = set(I_t)  # seeds at time 0
         else:
             prev_I = history[t - 1]["I"]
             prev_R = history[t - 1]["R"]
-            new_t = I_t - prev_I - prev_R
+            prev_D = history[t - 1].get("D", set())
+            new_t = I_t - prev_I - prev_R - prev_D
 
-        ever |= I_t | R_t
+        ever |= I_t | R_t | D_t
         new_infections.append(len(new_t))
         cum_ever.append(len(ever))
-        deaths_cum.append(len(R_t))   # cumulative deaths/removals
+        deaths_cum.append(len(D_t))   # cumulative deaths
 
     return rounds, new_infections, cum_ever, deaths_cum
 
@@ -364,7 +397,8 @@ def plot_simulation(history, sim_type: str = None, save_path: str = None):
         history[r] = set of newly infected nodes at round r.
 
     For 'sirs':
-        history[t] = {'S': set(...), 'I': set(...), 'R': set(...)}.
+        history[t] = {'S': set(...), 'I': set(...), 'R': set(...)}
+                     or {'S': ..., 'I': ..., 'R': ..., 'D': ...}.
     """
     if not history:
         print("[plot_simulation] Empty history; nothing to plot.")
@@ -388,7 +422,7 @@ def plot_simulation(history, sim_type: str = None, save_path: str = None):
         plt.figure(figsize=(8, 5))
         plt.plot(rounds, new_infections, marker="o", label="New infections per step")
         plt.plot(rounds, cum_ever, marker="s", linestyle="--", label="Cumulative ever infected")
-        plt.plot(rounds, deaths_cum, marker="^", linestyle="-.", label="Cumulative deaths (R)")
+        plt.plot(rounds, deaths_cum, marker="^", linestyle="-.", label="Cumulative deaths")
         plt.title("SIRS Infection Dynamics")
         plt.xlabel("Time step")
         plt.ylabel("Number of nodes")

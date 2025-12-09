@@ -29,9 +29,33 @@ python ./dynamic_population.py graph.gml --action cascade --initiator 1,2,5 --th
 
     Simulates: a cascade with Nodes 1, 2, and 5 as initiators, has a threshold of 0.33, and plots the number of new infections per day
 
-python ./dynamic_population.py --action covid --initiator 3,4 --probability_of_infection 0.02 --lifespan 100 --shelter 0.3 --vaccination
+python ./dynamic_population.py graph.gml --action covid --initiator 3,4 --probability_of_infection 1.10 --probability_of_death 0.1 --lifespan 5 --shelter 0.10 --vaccination 0.10 --interactive
 
-    Simulates: a pandemic simulation with Nodes 3 and 4 as initial spreaders, probability of infecting other nodes 0.02, 100-time steps (days) with 30% of the population sheltering in place and 24% of the population vaccinated. The output graph shows the results
+    Simulates: a pandemic simulation with Nodes 3 and 4 as initial spreaders, probability of infecting other nodes is 0.10, the infectious stage lasting 5 time-steps, 5-time steps (days) with 10% of the population sheltering in place and 10% of the population vaccinated (there could be overlap, just like how some people isolate and vaccinate). The following images shows the results.
+
+Initial Setup:
+![Program Output](images/covid_terminal_0.png)
+![Program Output](images/covid_inter_0.png)
+
+Time-stamp 1:
+![Program Output](images/covid_terminal_1.png)
+![Program Output](images/covid_inter_1.png)
+
+Time-stamp 2:
+![Program Output](images/covid_terminal_2.png)
+![Program Output](images/covid_inter_2.png)
+
+Time-stamp 3:
+![Program Output](images/covid_terminal_3.png)
+![Program Output](images/covid_inter_3.png)
+
+Time-stamp 4:
+![Program Output](images/covid_terminal_4.png)
+![Program Output](images/covid_inter_4.png)
+
+Time-stamp 5:
+![Program Output](images/covid_terminal_5.png)
+![Program Output](images/covid_inter_5.png)
 
 ## Explaination of Approach
 

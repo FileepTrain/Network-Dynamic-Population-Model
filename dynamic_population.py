@@ -74,19 +74,20 @@ def run_covid_simulation(G: nx.Graph, initiators, args):
             immune |= sheltered
 
     # Use a default if probability_of_death is not provided
-    death_prob = args.probability_of_death if args.probability_of_death is not None else 0.1
+    death_prob = args.probability_of_death if args.probability_of_death is not None else 0.0
 
     # Run SIRS simulation (assignment's "COVID" model)
-    history, infected_ever, final_R, final_I = simulate_sirs(
+    history, infected_ever, final_R, final_I, final_D = simulate_sirs(
         G,
         seeds=initiators,
         immune=immune,
         probability_of_infection=args.probability_of_infection,
-        probability_of_death=death_prob,
+        probability_of_death=args.probability_of_death,
+        infection_duration=args.lifespan,
         max_steps=args.lifespan,
     )
 
-    return history, infected_ever, final_R, final_I, immune
+    return history, infected_ever, final_R, final_I, final_D, immune
 
 
 # ---------------------------------------------------------------------
@@ -264,7 +265,7 @@ def main():
 
         print("[INFO] Running COVID (SIRS) simulation...")
 
-        history, infected_ever, final_R, final_I, immune = run_covid_simulation(
+        history, infected_ever, final_R, final_I, final_D, immune = run_covid_simulation(
             G,
             initiators=initiators,
             args=args,
@@ -275,7 +276,8 @@ def main():
         print(f"Immune at start (vaccinated + sheltered): {len(immune)}")
         print(f"Total ever infected:                      {len(infected_ever)}")
         print(f"Final infected (I):                       {len(final_I)}")
-        print(f"Final recovered/removed (R):              {len(final_R)}")
+        print(f"Final deceased (D):                       {len(final_D)}")
+        print(f"Final recovered/removed (R):              {len(final_R) + len(final_D)}")
         print("=====================================\n")
 
         # Interactive visualization
