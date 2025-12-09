@@ -25,11 +25,11 @@
 
 ## Sample Command-Line Usage
 
-python ./dynamic_population.py graph.gml --action cascade --initiator 1,2,5 --threshold 0.33 --plot
+    python ./dynamic_population.py graph.gml --action cascade --initiator 1,2,5 --threshold 0.33 --plot
 
 Simulates: a cascade with Nodes 1, 2, and 5 as initiators, has a threshold of 0.33, and plots the number of new infections per day
 
-python ./dynamic_population.py graph.gml --action covid --initiator 3,4 --probability_of_infection 1.10 --probability_of_death 0.1 --lifespan 5 --shelter 0.10 --vaccination 0.10 --interactive
+    python ./dynamic_population.py graph.gml --action covid --initiator 3,4 --probability_of_infection 1.10 --probability_of_death 0.1 --lifespan 5 --shelter 0.10 --vaccination 0.10 --interactive
 
 Simulates: a pandemic simulation with Nodes 3 and 4 as initial spreaders, probability of infecting other nodes is 0.10, the infectious stage lasting 5 time-steps, 5-time steps (days) with 10% of the population sheltering in place and 10% of the population vaccinated (there could be overlap, just like how some people isolate and vaccinate). The following images shows the results.
 
