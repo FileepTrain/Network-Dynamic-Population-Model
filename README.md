@@ -7,19 +7,19 @@
 
 --initiator m: choose the initial nodes that are infected. Replace m with the node IDs seperated by commas (Ex: 1, 2, 5)
 
---threshold q: <u>cascade<u> Set the threshold value of cascade effect
+--threshold q: **cascade** Set the threshold value of cascade effect
 
---probability_of_infection p: <u>covid<u> probability spread to other nodes
+--probability_of_infection p: **covid** probability spread to other nodes
 
---probability_of_death q: <u>covid<u> probability death while infected
+--probability_of_death q: **covid** probability death while infected
 
---lifespan l: <u>covid<u> number of steps/rounds/days
+--lifespan l: **covid** number of steps/rounds/days
 
---shelter s: <u>covid<u> (between 0 to 1) proportion of population sheltered/protected from infection
+--shelter s: **covid** (between 0 to 1) proportion of population sheltered/protected from infection
 
---vaccination r: <u>covid<u> (between 0 to 1) proportion of population that is vaccinated
+--vaccination r: **covid** (between 0 to 1) proportion of population that is vaccinated
 
---vaccination_effectiveness v: <u>covid<u> (vac_eff + prob_infect <= 1) for the people that are vaccinated, what is the additional percentage they are not getting infected
+--vaccination_effectiveness v: **covid** (vac_eff + prob_infect <= 1) for the people that are vaccinated, what is the additional percentage they are not getting infected
 
 --interactive: plot a graph and state of nodes for each round
 
