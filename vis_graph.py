@@ -95,8 +95,38 @@ def _draw_cascade_final(G, pos, ax, infected_so_far):
     ax.axis("off")
 
 
-def _draw_sirs_frame(G, pos, ax, state, step_idx):
-    """Draw a single SIRS frame (supports optional death state D)."""
+def _draw_sirs_frame(
+    G,
+    pos,
+    ax,
+    state,
+    step_idx,
+    vaccinated=None,
+    sheltered=None,
+    removed_edges=None,
+):
+    """
+    Draw a single SIRS frame.
+
+    Colors:
+      - D (dead):       black fill
+      - I (infected):   red fill
+      - R (recovered):  blue fill
+      - S (susceptible): white fill
+
+    Node borders:
+      - sheltered nodes: black edge
+      - vaccinated nodes (but not sheltered): green edge
+      - others: default black edge
+
+    Edges:
+      - existing graph edges: lightgray, solid
+      - removed_edges: gray, dashed
+    """
+    vaccinated = set(vaccinated or [])
+    sheltered = set(sheltered or [])
+    removed_edges = list(removed_edges or [])
+
     S = state["S"]
     I = state["I"]
     R = state["R"]
@@ -104,17 +134,9 @@ def _draw_sirs_frame(G, pos, ax, state, step_idx):
 
     ax.clear()
 
-    node_colors = []
-    for n in G.nodes():
-        if n in D:
-            node_colors.append("black")       # dead
-        elif n in I:
-            node_colors.append("red")         # infected
-        elif n in R:
-            node_colors.append("green")       # recovered/immune
-        else:
-            node_colors.append("lightgray")   # susceptible
+    # --- Draw edges ---
 
+    # 1) current graph edges: solid, lightgray
     nx.draw_networkx_edges(
         G,
         pos,
@@ -123,11 +145,65 @@ def _draw_sirs_frame(G, pos, ax, state, step_idx):
         alpha=0.7,
         ax=ax,
     )
+
+    # 2) removed edges (from sheltering): dashed
+    if removed_edges:
+        # make a temporary graph to draw removed edges even though they're not in G anymore
+        H = nx.DiGraph() if G.is_directed() else nx.Graph()
+        H.add_nodes_from(G.nodes())
+        H.add_edges_from(removed_edges)
+
+        nx.draw_networkx_edges(
+            H,
+            pos,
+            edgelist=list(H.edges()),
+            edge_color="gray",
+            style="dashed",
+            width=1.5,
+            alpha=0.7,
+            ax=ax,
+        )
+
+    # --- Draw nodes ---
+
+    node_colors = []
+    node_edgecolors = []
+    node_linewidths = []
+
+    for n in G.nodes():
+        # Fill color based on epidemiological state
+        if n in D:
+            fill = "black"          # dead
+        elif n in I:
+            fill = "red"            # infected
+        elif n in R:
+            fill = "blue"           # recovered
+        else:
+            fill = "white"          # susceptible
+
+        # Border color based on vaccination/shelter
+        # Sheltered takes precedence over vaccinated if overlap
+        if n in sheltered:
+            border = "black"
+            lw = 2.0
+        elif n in vaccinated:
+            border = "green"
+            lw = 2.0
+        else:
+            border = "black"
+            lw = 1.0
+
+        node_colors.append(fill)
+        node_edgecolors.append(border)
+        node_linewidths.append(lw)
+
     nx.draw_networkx_nodes(
         G,
         pos,
         node_color=node_colors,
         node_size=450,
+        edgecolors=node_edgecolors,
+        linewidths=node_linewidths,
         ax=ax,
     )
     nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
@@ -138,25 +214,28 @@ def _draw_sirs_frame(G, pos, ax, state, step_idx):
     ax.axis("off")
 
 
-def _draw_sirs_final(G, pos, ax, final_state):
-    """Draw final SIRS summary frame (supports optional death state D)."""
+def _draw_sirs_final(
+    G,
+    pos,
+    ax,
+    final_state,
+    vaccinated=None,
+    sheltered=None,
+    removed_edges=None,
+):
+    """Draw final SIRS summary frame with same styling as _draw_sirs_frame."""
+    vaccinated = set(vaccinated or [])
+    sheltered = set(sheltered or [])
+    removed_edges = list(removed_edges or [])
+
     final_S = final_state["S"]
     final_I = final_state["I"]
     final_R = final_state["R"]
     final_D = final_state.get("D", set())
 
     ax.clear()
-    final_colors = []
-    for n in G.nodes():
-        if n in final_D:
-            final_colors.append("black")
-        elif n in final_I:
-            final_colors.append("red")
-        elif n in final_R:
-            final_colors.append("green")
-        else:
-            final_colors.append("lightgray")
 
+    # --- Edges ---
     nx.draw_networkx_edges(
         G,
         pos,
@@ -165,11 +244,59 @@ def _draw_sirs_final(G, pos, ax, final_state):
         alpha=0.7,
         ax=ax,
     )
+
+    if removed_edges:
+        H = nx.DiGraph() if G.is_directed() else nx.Graph()
+        H.add_nodes_from(G.nodes())
+        H.add_edges_from(removed_edges)
+
+        nx.draw_networkx_edges(
+            H,
+            pos,
+            edgelist=list(H.edges()),
+            edge_color="gray",
+            style="dashed",
+            width=1.5,
+            alpha=0.7,
+            ax=ax,
+        )
+
+    # --- Nodes ---
+    node_colors = []
+    node_edgecolors = []
+    node_linewidths = []
+
+    for n in G.nodes():
+        if n in final_D:
+            fill = "black"
+        elif n in final_I:
+            fill = "red"
+        elif n in final_R:
+            fill = "blue"
+        else:
+            fill = "white"
+
+        if n in sheltered:
+            border = "black"
+            lw = 2.0
+        elif n in vaccinated:
+            border = "green"
+            lw = 2.0
+        else:
+            border = "black"
+            lw = 1.0
+
+        node_colors.append(fill)
+        node_edgecolors.append(border)
+        node_linewidths.append(lw)
+
     nx.draw_networkx_nodes(
         G,
         pos,
-        node_color=final_colors,
+        node_color=node_colors,
         node_size=450,
+        edgecolors=node_edgecolors,
+        linewidths=node_linewidths,
         ax=ax,
     )
     nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
@@ -224,9 +351,23 @@ def _run_interactive_cascade(G, history, pos, fig, ax, save_prefix):
         fig.savefig(f"{save_prefix}_final.png", bbox_inches="tight")
 
 
-def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
+def _run_interactive_sirs(
+    G,
+    history,
+    pos,
+    fig,
+    ax,
+    save_prefix,
+    vaccinated=None,
+    sheltered=None,
+    removed_edges=None,
+):
     print("\nInteractive SIRS Viewer")
     print("Press ENTER for next step, or type 'q' then ENTER to quit.\n")
+
+    vaccinated = set(vaccinated or [])
+    sheltered = set(sheltered or [])
+    removed_edges = list(removed_edges or [])
 
     last_state = history[-1]
 
@@ -237,7 +378,16 @@ def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
         D = state.get("D", set())
 
         # draw frame
-        _draw_sirs_frame(G, pos, ax, state, t)
+        _draw_sirs_frame(
+            G,
+            pos,
+            ax,
+            state,
+            t,
+            vaccinated=vaccinated,
+            sheltered=sheltered,
+            removed_edges=removed_edges,
+        )
 
         fig.canvas.draw()
         fig.canvas.flush_events()
@@ -262,7 +412,7 @@ def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
         # newly dead: in current D but not previous D
         new_deaths = D - prev_D
 
-        # newly recovered (optional, useful with explicit R vs D)
+        # newly recovered
         new_recoveries = R - prev_R
 
         print(f"[Step {t}]")
@@ -288,7 +438,15 @@ def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
                 print("Exiting interactive SIRS viewer early.")
                 break
 
-    _draw_sirs_final(G, pos, ax, last_state)
+    _draw_sirs_final(
+        G,
+        pos,
+        ax,
+        last_state,
+        vaccinated=vaccinated,
+        sheltered=sheltered,
+        removed_edges=removed_edges,
+    )
     fig.canvas.draw()
     fig.canvas.flush_events()
     plt.pause(0.001)
@@ -300,7 +458,15 @@ def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
 # ---------------------------------------------------------------------
 # PUBLIC: INTERACTIVE SIMULATION
 # ---------------------------------------------------------------------
-def interactive_simulation(G: nx.Graph, history, sim_type: str = None, save_prefix: str = None):
+def interactive_simulation(
+    G: nx.Graph,
+    history,
+    sim_type: str = None,
+    save_prefix: str = None,
+    vaccinated=None,
+    sheltered=None,
+    removed_edges=None,
+):
     """
     Unified interactive visualization.
 
@@ -310,6 +476,11 @@ def interactive_simulation(G: nx.Graph, history, sim_type: str = None, save_pref
     For 'sirs':
         history[t] = {'S': set(...), 'I': set(...), 'R': set(...)}
                      or {'S': ..., 'I': ..., 'R': ..., 'D': ...}.
+
+    Extra (SIRS only):
+      - vaccinated: set of vaccinated node IDs
+      - sheltered: set of sheltered node IDs
+      - removed_edges: list of edges removed due to sheltering
     """
     if not history:
         print("[interactive_simulation] Empty history; nothing to display.")
@@ -324,7 +495,17 @@ def interactive_simulation(G: nx.Graph, history, sim_type: str = None, save_pref
     if sim_type == "cascade":
         _run_interactive_cascade(G, history, pos, fig, ax, save_prefix)
     elif sim_type == "sirs":
-        _run_interactive_sirs(G, history, pos, fig, ax, save_prefix)
+        _run_interactive_sirs(
+            G,
+            history,
+            pos,
+            fig,
+            ax,
+            save_prefix,
+            vaccinated=vaccinated,
+            sheltered=sheltered,
+            removed_edges=removed_edges,
+        )
     else:
         raise ValueError(f"Unknown sim_type '{sim_type}'. Use 'cascade' or 'sirs'.")
 
@@ -441,4 +622,3 @@ def plot_simulation(history, sim_type: str = None, save_path: str = None):
     print("Plot displayed. Press ENTER to close the plot window(s).")
     input()
     plt.close("all")
-    
