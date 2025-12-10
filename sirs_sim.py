@@ -1,154 +1,131 @@
+
 import random
 import networkx as nx
-from typing import Iterable, Set, Dict, List, Tuple, Any
-
 
 def simulate_sirs(
     G: nx.Graph,
-    seeds: Iterable[Any],
-    immune: Iterable[Any] | None = None,
+    seeds,
+    immune=None,
     probability_of_infection: float = 0.2,   # S → I
     probability_of_death: float = 0.1,       # I → D
-    infection_duration: int = 5,             # Duration an individual remains infected if they do not die
+    infection_duration: int = 5,             # Duration an individual remains infected if they don't die
     max_steps: int = 100,
-    vaccinated: Iterable[Any] | None = None,
-    vaccination_effectiveness: float = 0.0,  # in [0, 1]; 1 = fully effective, 0 = no effect
-) -> Tuple[
-    List[Dict[str, Set[Any]]],
-    Set[Any],
-    Set[Any],
-    Set[Any],
-    Set[Any],
-]:
+    vaccinated=None,
+    vaccination_effectiveness: float = 0.0,  # in [0, 1], 1 = fully effective, 0 = no effect
+):
+    
+    #Future implementations could make a R -> S (where whatever nodes not are "permenantly" immune)
+    #probability_of_recovery: float = 0.1,   # I -> R
     """
-    Simple SIRS-like epidemic simulation on a static graph.
+    Simulate an SIR epidemic model on graph G, recording per-step history.
 
     States:
-        S: susceptible
-        I: infected
-        R: recovered / immune
-        D: dead
+      S = susceptible
+      I = infected (spreading)
+      R = recovered/removed (cannot be infected again)
 
-    Parameters
-    ----------
-    G : nx.Graph
-        Contact network.
-    seeds : iterable
-        Initial infected nodes.
-    immune : iterable, optional
-        Nodes that start immune (in R) and never leave that state.
-    probability_of_infection : float
-        Base probability that an S node becomes infected from an infected neighbor.
-    probability_of_death : float
-        Probability that an infected node dies at each time step.
-    infection_duration : int
-        Minimum number of steps a node remains infected (if it does not die earlier).
-    max_steps : int
-        Maximum number of simulation steps.
-    vaccinated : iterable, optional
-        Nodes that are vaccinated. They are still susceptible but with a reduced
-        effective infection probability.
-    vaccination_effectiveness : float in [0, 1]
-        Effectiveness of vaccination. Interpreted as:
-            effective_p_infection = probability_of_infection * (1 - vaccination_effectiveness)
-        for vaccinated nodes.
+    Args:
+      G: undirected graph
+      seeds: initial infected nodes (iterable)
+      immune: nodes that start permanently immune → in R immediately
+      probability_of_infection: P(S → I)
+      probability_of_death:    P(I → R)
+      max_steps: total number of time steps
 
-    Returns
-    -------
-    history : list of dict
-        Each element is {"S": set, "I": set, "R": set, "D": set} for a time step.
-    infected_ever : set
-        Nodes that were ever infected at any point.
-    R : set
-        Nodes recovered/immune at the end.
-    I : set
-        Nodes infected at the end.
-    D : set
-        Nodes dead at the end.
+    Returns:
+      history: list of time steps, where each step is:
+                {"S": set(...), "I": set(...), "R": set(...)}
+      infected_ever: set of nodes that were *ever* infected
+      final_R: nodes recovered/removed at end
+      final_I: nodes still infected at end
     """
 
-    # Normalize inputs
     seeds = set(seeds)
     immune = set(immune) if immune is not None else set()
+
     vaccinated = set(vaccinated) if vaccinated is not None else set()
 
-    # Clamp vaccination effectiveness
+    # Clamp effectiveness to [0, 1]
     vaccination_effectiveness = max(0.0, min(1.0, vaccination_effectiveness))
 
-    nodes = set(G.nodes())
+    # Initialize sets
+    S = set(G.nodes())
+    I = set()
+    R = set()
+    D = set()
 
-    # Initial state
-    I: Set[Any] = set(seeds)
-    # immune nodes start in R and are never allowed in S or I
-    R: Set[Any] = set(immune)
-    D: Set[Any] = set()
-    S: Set[Any] = nodes - I - R - D
+    # Immune nodes → permanently recovered
+    R |= immune
+    S -= immune
 
-    # Track how long each node has been infected
-    infection_age: Dict[Any, int] = {u: 0 for u in I}
+    # Infect initial seeds (if they are not immune)
+    seeds = seeds - R
+    I |= seeds
+    S -= seeds
 
-    infected_ever: Set[Any] = set(I)
+    infected_ever = set(I)
 
-    history: List[Dict[str, Set[Any]]] = []
+    #Track how long each node has been infected
+    infection_age = {}
+    for node in I:
+        infection_age[node] = 0
 
-    # Record initial state (t = 0)
-    history.append({
+    # Save initial state
+    history = [{
         "S": set(S),
         "I": set(I),
         "R": set(R),
         "D": set(D),
-    })
+    }]
 
     for _ in range(max_steps):
         if not I:
-            # No active infections; epidemic ended
-            break
+            break  # No infected left → stop
 
-        new_I: Set[Any] = set()
-        new_R: Set[Any] = set()
-        new_D: Set[Any] = set()
+        new_I = set()
+        new_R = set()
+        new_D = set()
 
-        # Infection: S → I
+                # Infection: S → I
         for u in I:
-            if u not in G:  # node might have been removed in some external manipulation
-                continue
             for v in G.neighbors(u):
-                # Only susceptible and non-immune nodes can be infected
                 if v not in S:
-                    continue
-                if v in immune:
                     continue
 
                 # Base infection probability
                 p = probability_of_infection
 
-                # Vaccinated nodes: lower effective probability
+                # Vaccinated nodes get a lower effective probability
                 if v in vaccinated:
-                    # effectiveness scales the infection probability down
+                    # interpretation: effectiveness scales down infection probability
+                    # eff = 0   -> behaves like unvaccinated
+                    # eff = 1   -> cannot be infected (p -> 0)
                     p = probability_of_infection * (1.0 - vaccination_effectiveness)
 
                 if p > 0.0 and random.random() < p:
                     new_I.add(v)
 
-        # Disease progression for currently infected nodes
-        for u in list(I):
-            # Increase infection age
-            infection_age[u] = infection_age.get(u, 0) + 1
 
-            # First, check death
+
+        # Death or Recovery: I -> D or I -> R
+        for u in list(I):
+            # First, check for death this step
             if random.random() < probability_of_death:
                 new_D.add(u)
-                continue
+                infection_age.pop(u, None)  # no longer tracking age after death
+            else:
+                # Survives this step → increase infection age
+                infection_age[u] = infection_age.get(u, 0) + 1
+                # If infection has lasted long enough, recover
+                if infection_age[u] >= infection_duration:
+                    new_R.add(u)
+                    infection_age.pop(u, None)
 
-            # If not dead and has been infected long enough, recover
-            if infection_age[u] >= infection_duration:
-                new_R.add(u)
-
-        # Initialize age for new infections
+        # Initialize infection age for new infections
         for node in new_I:
             infection_age[node] = 0
 
-        # State transitions
+        # Update states
         S -= new_I
         I |= new_I
         I -= (new_R | new_D)
@@ -157,10 +134,6 @@ def simulate_sirs(
 
         infected_ever |= new_I
 
-        # Remove infection_age entries for nodes that left I
-        for node in new_R | new_D:
-            if node in infection_age:
-                del infection_age[node]
 
         # Record state
         history.append({
@@ -169,9 +142,5 @@ def simulate_sirs(
             "R": set(R),
             "D": set(D),
         })
-
-        # No changes → steady state
-        if not new_I and not new_R and not new_D:
-            break
 
     return history, infected_ever, R, I, D

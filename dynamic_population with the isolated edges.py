@@ -43,49 +43,38 @@ def run_covid_simulation(G: nx.Graph, initiators, args):
     """
     Helper for the COVID/SIRS part of the assignment.
 
-    - Vaccinated nodes: still susceptible but have a lower infection probability.
-    - Sheltered nodes: all incident edges are removed (cannot infect/be infected via network).
-    - Initiators are excluded from vaccination/shelter selection.
+    - Builds the immune set from vaccination + shelter, excluding initiators.
+    - Calls simulate_sirs with the right parameters.
+    - Returns (history, infected_ever, final_R, final_I, immune).
     """
-    immune = set()       # reserved if you ever want truly immune nodes
-    vaccinated = set()
-    sheltered = set()
-
+    immune = set()
     n = G.number_of_nodes()
     nodes_list = list(G.nodes())
 
+    # Make sure we treat initiators as a set for fast lookup
     initiators_set = set(initiators)
 
     # Eligible nodes for vaccination/shelter: everyone except initiators
     eligible_nodes = [node for node in nodes_list if node not in initiators_set]
 
-    # Vaccination: r fraction of the population becomes vaccinated (but not immune)
+    # Vaccination: r fraction of the population becomes immune
     if args.vaccination is not None and args.vaccination > 0:
         target_vaccinated = int(args.vaccination * n)
         if target_vaccinated > 0 and eligible_nodes:
             k = min(target_vaccinated, len(eligible_nodes))
             vaccinated = set(random.sample(eligible_nodes, k))
+            immune |= vaccinated
 
-    # Shelter: s fraction of the population has all edges removed
+    # Shelter: s fraction of the population becomes immune / non-participatory
     if args.shelter is not None and args.shelter > 0:
         target_shelter = int(args.shelter * n)
         if target_shelter > 0 and eligible_nodes:
             k = min(target_shelter, len(eligible_nodes))
             sheltered = set(random.sample(eligible_nodes, k))
-
-            # Remove all edges incident to sheltered nodes
-            for node in sheltered:
-                if G.is_directed():
-                    # remove both in- and out-edges
-                    G.remove_edges_from(list(G.in_edges(node)) + list(G.out_edges(node)))
-                else:
-                    G.remove_edges_from(list(G.edges(node)))
+            immune |= sheltered
 
     # Use a default if probability_of_death is not provided
     death_prob = args.probability_of_death if args.probability_of_death is not None else 0.0
-
-    # Vaccination effectiveness (0-1, default 0 -> no effect)
-    vacc_eff = args.vaccination_effectiveness if getattr(args, "vaccination_effectiveness", None) is not None else 0.0
 
     # Run SIRS simulation (assignment's "COVID" model)
     history, infected_ever, final_R, final_I, final_D = simulate_sirs(
@@ -93,14 +82,13 @@ def run_covid_simulation(G: nx.Graph, initiators, args):
         seeds=initiators,
         immune=immune,
         probability_of_infection=args.probability_of_infection,
-        probability_of_death=death_prob,
+        probability_of_death=args.probability_of_death,
         infection_duration=args.lifespan,
         max_steps=args.lifespan,
-        vaccinated=vaccinated,
-        vaccination_effectiveness=vacc_eff,
     )
 
-    return history, infected_ever, final_R, final_I, final_D, immune, vaccinated, sheltered
+    return history, infected_ever, final_R, final_I, final_D, immune
+
 
 # ---------------------------------------------------------------------
 # ARGUMENT PARSER
@@ -176,13 +164,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Vaccination rate r (0–1) of the population",
     )
 
-    parser.add_argument(
-        "--vaccination_effectiveness",
-        type=float,
-        help="Effectiveness of vaccination (0–1). 1 = fully effective (no infection), 0 = no effect.",
-    )
-
-
     # Plotting options
     parser.add_argument(
         "--interactive",
@@ -256,7 +237,7 @@ def main():
 
         # Interactive visualization
         if args.interactive:
-            interactive_simulation(G, history, sim_type="cascade", vaccinated=vaccinated)
+            interactive_simulation(G, history, sim_type="cascade")
 
         # Plot curve
         if args.plot:
@@ -284,7 +265,7 @@ def main():
 
         print("[INFO] Running COVID (SIRS) simulation...")
 
-        history, infected_ever, final_R, final_I, final_D, immune, vaccinated, sheltered = run_covid_simulation(
+        history, infected_ever, final_R, final_I, final_D, immune = run_covid_simulation(
             G,
             initiators=initiators,
             args=args,
@@ -292,10 +273,7 @@ def main():
 
         # Print basic outcomes
         print("\n=== COVID / SIRS SIMULATION RESULT ===")
-        print(f"Sheltered nodes (edges removed):           {len(sheltered)}")
-        print(f"Vaccinated nodes:                          {len(vaccinated)}")
-        print(f"Vaccination effectiveness: {getattr(args, 'vaccination_effectiveness', None)}")
-        print(f"Immune at start (explicit immune set):     {len(immune)}")
+        print(f"Immune at start (vaccinated + sheltered): {len(immune)}")
         print(f"Total ever infected:                      {len(infected_ever)}")
         print(f"Final infected (I):                       {len(final_I)}")
         print(f"Final deceased (D):                       {len(final_D)}")
