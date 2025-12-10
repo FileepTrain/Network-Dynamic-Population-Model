@@ -37,33 +37,33 @@
 
 Simulates: a cascade with Nodes 1, 2, and 5 as initiators, has a threshold of 0.33, and plots the number of new infections per day
 
-![Program Output](images/cascade_curve.png)
-![Program Output](images/cascade_terminal_plot.png)
+![Program Output](images/cascade/cascade_curve.png)
+![Program Output](images/cascade/cascade_terminal_plot.png)
 
     python ./dynamic_population.py graph.gml --action cascade --initiator 1,2,5 --threshold 0.33 --interactive
 
 Simulates: same as above, but with the interactive feature now
 
 Initial Setup:
-![Program Output](images/cascade_inter_0.png)
+![Program Output](images/cascade/cascade_inter_0.png)
 
 Time-stamp 1:
-![Program Output](images/cascade_inter_1.png)
+![Program Output](images/cascade/cascade_inter_1.png)
 
 Time-stamp 2:
-![Program Output](images/cascade_inter_2.png)
+![Program Output](images/cascade/cascade_inter_2.png)
 
 Time-stamp 3:
-![Program Output](images/cascade_inter_3.png)
+![Program Output](images/cascade/cascade_inter_3.png)
 
 Time-stamp 4:
-![Program Output](images/cascade_inter_4.png)
+![Program Output](images/cascade/cascade_inter_4.png)
 
 Time-stamp 5:
-![Program Output](images/cascade_inter_5.png)
+![Program Output](images/cascade/cascade_inter_5.png)
 
 Time-stamp 6:
-![Program Output](images/cascade_inter_6.png)
+![Program Output](images/cascade/cascade_inter_6.png)
 
     python ./dynamic_population.py graph.gml --action covid --initiator 3,4 --lifespan 5 --probability_of_infection 1.10 --probability_of_death 0.1 --infection_duration 2 --shelter 0.2 --shelter_effectiveness 0.5 --vaccination 0.2 --vaccination_effectiveness 0.5 --resusceptibility 0.5 --interactive
 
