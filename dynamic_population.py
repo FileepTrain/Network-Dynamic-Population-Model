@@ -120,6 +120,7 @@ def run_covid_simulation(G: nx.Graph, initiators, args):
         max_steps=args.lifespan,
         vaccinated=vaccinated,
         vaccination_effectiveness=args.vaccination_effectiveness,
+        resusceptibility=args.resusceptibility,  
     )
 
     return (
@@ -225,6 +226,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         help="Effectiveness of vaccination (0–1). 1 = fully effective (no infection), 0 = no effect.",
     )
+    parser.add_argument(
+    "--resusceptibility",
+    type=float,
+    help="Probability (0–1) that a recovered node becomes susceptible again each step (R→S).",
+    )
+
 
 
     # Plotting options
