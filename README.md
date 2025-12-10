@@ -37,33 +37,68 @@
 
 Simulates: a cascade with Nodes 1, 2, and 5 as initiators, has a threshold of 0.33, and plots the number of new infections per day
 
-    python ./dynamic_population.py graph.gml --action covid --initiator 3,4 --lifespan 5 --probability_of_infection 1.10 --probability_of_death 0.1 --infection_duration 2 --shelter 0.2 --shelter_effectiveness 0.5 --vaccination 0.2 --vaccination_effectiveness 0.5 --resusceptibility 0.5 --interactive
+![Program Output](images/cascade_curve.png)
+![Program Output](images/cascade_terminal_plot.png)
 
-Simulates: a pandemic simulation with Nodes 3 and 4 as initial spreaders, probability of infecting other nodes is 0.10, the infectious stage lasting 5 time-steps, 5-time steps (days) with 10% of the population sheltering in place (reducing contact by half) and 10% of the population vaccinated (decreasing their likelihood of infection by half) (there could be overlap, just like how some people isolate and vaccinate). The following images shows the results.
+    python ./dynamic_population.py graph.gml --action cascade --initiator 1,2,5 --threshold 0.33 --interactive
+
+Simulates: same as above, but with the interactive feature now
 
 Initial Setup:
-![Program Output](images/covid_terminal_0.png)
-![Program Output](images/covid_inter_0.png)
+![Program Output](images/cascade_inter_0.png)
 
 Time-stamp 1:
-![Program Output](images/covid_terminal_1.png)
-![Program Output](images/covid_inter_1.png)
+![Program Output](images/cascade_inter_1.png)
 
 Time-stamp 2:
-![Program Output](images/covid_terminal_2.png)
-![Program Output](images/covid_inter_2.png)
+![Program Output](images/cascade_inter_2.png)
 
 Time-stamp 3:
-![Program Output](images/covid_terminal_3.png)
-![Program Output](images/covid_inter_3.png)
+![Program Output](images/cascade_inter_3.png)
 
 Time-stamp 4:
-![Program Output](images/covid_terminal_4.png)
-![Program Output](images/covid_inter_4.png)
+![Program Output](images/cascade_inter_4.png)
 
 Time-stamp 5:
-![Program Output](images/covid_terminal_5.png)
-![Program Output](images/covid_inter_5.png)
+![Program Output](images/cascade_inter_5.png)
+
+Time-stamp 6:
+![Program Output](images/cascade_inter_6.png)
+
+    python ./dynamic_population.py graph.gml --action covid --initiator 3,4 --lifespan 5 --probability_of_infection 1.10 --probability_of_death 0.1 --infection_duration 2 --shelter 0.2 --shelter_effectiveness 0.5 --vaccination 0.2 --vaccination_effectiveness 0.5 --resusceptibility 0.5 --interactive
+
+Simulates: a pandemic simulation with Nodes 3 and 4 as initial spreaders, probability of infecting other nodes is 0.10, the infectious stage lasting 2 time-steps, 5-time steps (days) with 10% of the population sheltering in place (reducing contact by half) and 10% of the population vaccinated (decreasing their likelihood of infection by half) (there could be overlap, just like how some people isolate and vaccinate). The following images shows the results.
+
+Initial Setup:
+![Program Output](images/covid/covid_terminal_0.png)
+![Program Output](images/covid/covid_inter_0.png)
+
+Time-stamp 1:
+![Program Output](images/covid/covid_terminal_1.png)
+![Program Output](images/covid/covid_inter_1.png)
+
+Time-stamp 2:
+![Program Output](images/covid/covid_terminal_2.png)
+![Program Output](images/covid/covid_inter_2.png)
+
+Time-stamp 3:
+![Program Output](images/covid/covid_terminal_3.png)
+![Program Output](images/covid/covid_inter_3.png)
+
+Time-stamp 4:
+![Program Output](images/covid/covid_terminal_4.png)
+![Program Output](images/covid/covid_inter_4.png)
+
+Time-stamp 5:
+![Program Output](images/covid/covid_terminal_5.png)
+![Program Output](images/covid/covid_inter_5.png)
+
+    python ./dynamic_population.py graph.gml --action covid --initiator 3,4 --lifespan 5 --probability_of_infection 1.10 --probability_of_death 0.1 --infection_duration 2 --shelter 0.2 --shelter_effectiveness 0.5 --vaccination 0.2 --vaccination_effectiveness 0.5 --resusceptibility 0.5 --plot
+
+Simulates: same as above, but with the plot feature now
+
+![Program Output](images/covid/covid_curve.png)
+![Program Output](images/covid/covid_curve_terminal.png)
 
 ## Explaination of Approach
 
@@ -72,11 +107,11 @@ Our cascade model is very similiar to what we did in class, and models the nodes
 The covid model is based on the SIRS model, and has a lot of additional features to test different relationships. This model also includes SID, and the node is permanently cut off from the network (like when people pass away from COVID).
 
 These features are focused on 2 main aspects, the disease's properties and the population's response:
-1) disease properties
+1) Disease properties
 - This is probability_of_infection, probability_of_death, infection_duration, and resuceptibility
     - This is the baseline of what the disease will do.
 
-2) social network reaction
+2) Social network reaction
 - This is shelter, shelter_effectiveness, vaccination_rate, and vaccination_effectiveness.
     - These are measures that will reduce the spread between nodes
 
