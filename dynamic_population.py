@@ -134,9 +134,10 @@ def run_covid_simulation(G: nx.Graph, initiators, args):
         removed_edges,
     )
 
-def print_sirs_settings(args, initiators):
+def print_sirs_settings(args, initiators, vaccinated, sheltered):
     """
-    Print all SIRS simulation settings and whether each was user-provided or default.
+    Print all SIRS simulation settings and whether each was user-provided or default,
+    plus the actual vaccinated and sheltered nodes chosen for this run.
     """
 
     def setting(name, value, provided):
@@ -200,7 +201,12 @@ def print_sirs_settings(args, initiators):
     )
 
     print(f"{'Initial seeds:':<38} {initiators}")
+    print(f"{'Vaccinated nodes (count):':<38} {len(vaccinated)}")
+    print(f"{'Vaccinated nodes (IDs):':<38} {sorted(vaccinated) if vaccinated else 'None'}")
+    print(f"{'Sheltered nodes (count):':<38} {len(sheltered)}")
+    print(f"{'Sheltered nodes (IDs):':<38} {sorted(sheltered) if sheltered else 'None'}")
     print("=========================================\n")
+
 
 def print_sirs_results(history, vaccinated, sheltered, infected_ever, final_I, final_R, final_D):
     """
@@ -353,7 +359,7 @@ def parse_initiators(initiator_str: str):
 
 
 # ---------------------------------------------------------------------
-# MAIN (ONLY TESTS ARGS + FILE HANDLING)
+# MAIN
 # ---------------------------------------------------------------------
 def main():
     parser = build_parser()
@@ -372,6 +378,39 @@ def main():
     initiators = parse_initiators(args.initiator)
 
     # ------------------------------------------------------------
+    # Sanity checks: disallow simulation-specific args
+    # when the wrong --action is chosen
+    # ------------------------------------------------------------
+
+    if args.action == "cascade":
+        # These options are only meaningful for COVID/SIRS
+        covid_only_flags = [
+            ("probability_of_infection", "--probability_of_infection"),
+            ("probability_of_death", "--probability_of_death"),
+            ("infection_duration", "--infection_duration"),
+            ("lifespan", "--lifespan"),
+            ("shelter", "--shelter"),
+            ("shelter_effectiveness", "--shelter_effectiveness"),
+            ("vaccination", "--vaccination"),
+            ("vaccination_effectiveness", "--vaccination_effectiveness"),
+            ("resusceptibility", "--resusceptibility"),
+        ]
+        forbidden = [
+            flag for attr, flag in covid_only_flags
+            if getattr(args, attr) is not None
+        ]
+        if forbidden:
+            print("[ERROR] The following options are only valid with --action covid:")
+            print("       " + ", ".join(forbidden))
+            return
+
+    if args.action == "covid":
+        # Cascade-only argument
+        if args.threshold is not None:
+            print("[ERROR] --threshold is only valid with --action cascade.")
+            return
+
+    # ------------------------------------------------------------
     # CASCADE ACTION
     # ------------------------------------------------------------
     if args.action == "cascade":
@@ -388,13 +427,6 @@ def main():
             q=args.threshold
         )
 
-        # Print results
-        print("\n=== CASCADE SIMULATION RESULT ===")
-        for r, nodes in enumerate(history):
-            print(f"Round {r}: {sorted(nodes)}")
-        print(f"\nFinal adopted count: {len(final_adopted)}")
-        print("=================================\n")
-
         # Interactive visualization
         if args.interactive:
             interactive_simulation(G, history, sim_type="cascade")
@@ -402,27 +434,21 @@ def main():
         # Plot curve
         if args.plot:
             plot_simulation(history, sim_type="cascade", save_path="cascade_curve.png")
-
+            
+        # Print results
+        print("\n=== CASCADE SIMULATION RESULT ===")
+        for r, nodes in enumerate(history):
+            print(f"Round {r}: {sorted(nodes)}")
+        print(f"\nFinal adopted count: {len(final_adopted)}")
+        print("=================================\n")
 
     # ------------------------------------------------------------
     # COVID ACTION (SIRS model)
     # ------------------------------------------------------------
     elif args.action == "covid":
 
-        missing = []
-        if args.probability_of_infection is None:
-            missing.append("--probability_of_infection")
-        if args.lifespan is None:
-            missing.append("--lifespan")
-        if args.shelter is None:
-            missing.append("--shelter")
-        if args.vaccination is None:
-            missing.append("--vaccination")
-
-        if missing:
-            print(f"[ERROR] Missing required COVID parameters: {', '.join(missing)}")
-            return
-
+        # At this point, *no* COVID params are required:
+        # simulate_sirs + print_sirs_settings handle defaults.
         print("[INFO] Running COVID (SIRS) simulation...")
 
         history, infected_ever, final_R, final_I, final_D, vaccinated, sheltered, removed_edges = run_covid_simulation(
@@ -431,8 +457,8 @@ def main():
             args=args,
         )
 
-        # print settings
-        print_sirs_settings(args, initiators)
+        # Print settings (including which are defaults vs user inputs)
+        print_sirs_settings(args, initiators, vaccinated, sheltered)
 
         # Interactive visualization
         if args.interactive:
@@ -443,13 +469,13 @@ def main():
                 vaccinated=vaccinated,
                 sheltered=sheltered,
                 removed_edges=removed_edges,
-        )
+            )
 
         # Plot curve
         if args.plot:
             plot_simulation(history, sim_type="sirs", save_path="sirs_curve.png")
             
-        #print results
+        # Print results (including average daily infected)
         print_sirs_results(
             history,
             vaccinated,
@@ -459,7 +485,6 @@ def main():
             final_R,
             final_D,
         )
-
 
 
 if __name__ == "__main__":
