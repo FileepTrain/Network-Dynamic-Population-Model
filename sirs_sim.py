@@ -4,12 +4,12 @@ import networkx as nx
 def simulate_sirs(
     G: nx.Graph,
     seeds,
-    probability_of_infection: float = 0.2,   # S → I
-    probability_of_death: float = 0.1,       # I → D
-    infection_duration: int = 5,             # time infected before recovering
+    probability_of_infection: float = 0.03,   # S → I
+    probability_of_death: float = 0.01,       # I → D
+    infection_duration: int = 7,             # time infected before recovering
     max_steps: int = 100,
     vaccinated=None,
-    vaccination_effectiveness: float = 0.5,
+    vaccination_effectiveness: float = 0.7,
     resusceptibility: float = 0.1,           # R → S per step
 ):
     """
@@ -24,17 +24,17 @@ def simulate_sirs(
 
     # --- Handle None defaults ---
     if probability_of_infection is None:
-        probability_of_infection = 0.2
+        probability_of_infection = 0.03
     if probability_of_death is None:
-        probability_of_death = 0.1
+        probability_of_death = 0.01
     if infection_duration is None:
-        infection_duration = 5
+        infection_duration = 7
     if max_steps is None:
         max_steps = 100
     if vaccination_effectiveness is None:
-        vaccination_effectiveness = 0.5
+        vaccination_effectiveness = 0.70
     if resusceptibility is None:
-        resusceptibility = 0.1
+        resusceptibility = 0.01
 
     # Clamp all probabilities to [0,1]
     probability_of_infection = max(0.0, min(1.0, probability_of_infection))

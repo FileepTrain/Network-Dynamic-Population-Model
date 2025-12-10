@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 
 # ---------------------------------------------------------------------
 # TYPE INFERENCE
@@ -140,7 +141,7 @@ def _draw_sirs_frame(
     nx.draw_networkx_edges(
         G,
         pos,
-        edge_color="lightgray",
+        edge_color="darkgray",
         width=1.5,
         alpha=0.7,
         ax=ax,
@@ -148,7 +149,6 @@ def _draw_sirs_frame(
 
     # 2) removed edges (from sheltering): dashed
     if removed_edges:
-        # make a temporary graph to draw removed edges even though they're not in G anymore
         H = nx.DiGraph() if G.is_directed() else nx.Graph()
         H.add_nodes_from(G.nodes())
         H.add_edges_from(removed_edges)
@@ -157,7 +157,7 @@ def _draw_sirs_frame(
             H,
             pos,
             edgelist=list(H.edges()),
-            edge_color="gray",
+            edge_color="lightgray",
             style="dashed",
             width=1.5,
             alpha=0.7,
@@ -182,10 +182,9 @@ def _draw_sirs_frame(
             fill = "white"          # susceptible
 
         # Border color based on vaccination/shelter
-        # Sheltered takes precedence over vaccinated if overlap
         if n in sheltered:
             border = "black"
-            lw = 2.0
+            lw = 5.0
         elif n in vaccinated:
             border = "green"
             lw = 2.0
@@ -211,7 +210,22 @@ def _draw_sirs_frame(
     ax.set_title(
         f"Step {step_idx} | S={len(S)}  I={len(I)}  R={len(R)}  D={len(D)} (SIRS)"
     )
+
+    # --- Legend for SIRS ---
+    legend_handles = [
+        Patch(facecolor="white", edgecolor="black", label="Susceptible (S)"),
+        Patch(facecolor="red", edgecolor="black", label="Infected (I)"),
+        Patch(facecolor="blue", edgecolor="black", label="Recovered (R)"),
+        Patch(facecolor="black", edgecolor="black", label="Dead (D)"),
+        Line2D([0], [0], color="black", lw=2, label="Sheltered node border"),
+        Line2D([0], [0], color="green", lw=2, label="Vaccinated node border"),
+        Line2D([0], [0], color="lightgray", lw=1.5, label="Active edge"),
+        Line2D([0], [0], color="gray", lw=1.5, linestyle="dashed", label="Removed edge"),
+    ]
+    ax.legend(handles=legend_handles, loc="upper left", fontsize=7, framealpha=0.8)
+
     ax.axis("off")
+
 
 
 def _draw_sirs_final(
@@ -239,7 +253,7 @@ def _draw_sirs_final(
     nx.draw_networkx_edges(
         G,
         pos,
-        edge_color="lightgray",
+        edge_color="darkgray",
         width=1.5,
         alpha=0.7,
         ax=ax,
@@ -254,7 +268,7 @@ def _draw_sirs_final(
             H,
             pos,
             edgelist=list(H.edges()),
-            edge_color="gray",
+            edge_color="lightgray",
             style="dashed",
             width=1.5,
             alpha=0.7,
@@ -278,7 +292,7 @@ def _draw_sirs_final(
 
         if n in sheltered:
             border = "black"
-            lw = 2.0
+            lw = 5.0
         elif n in vaccinated:
             border = "green"
             lw = 2.0
@@ -304,7 +318,22 @@ def _draw_sirs_final(
     ax.set_title(
         f"Final SIRS State | S={len(final_S)}  I={len(final_I)}  R={len(final_R)}  D={len(final_D)}"
     )
+
+    # --- Legend for SIRS (same as frame) ---
+    legend_handles = [
+        Patch(facecolor="white", edgecolor="black", label="Susceptible (S)"),
+        Patch(facecolor="red", edgecolor="black", label="Infected (I)"),
+        Patch(facecolor="blue", edgecolor="black", label="Recovered (R)"),
+        Patch(facecolor="black", edgecolor="black", label="Dead (D)"),
+        Line2D([0], [0], color="black", lw=2, label="Sheltered node border"),
+        Line2D([0], [0], color="green", lw=2, label="Vaccinated node border"),
+        Line2D([0], [0], color="lightgray", lw=1.5, label="Active edge"),
+        Line2D([0], [0], color="gray", lw=1.5, linestyle="dashed", label="Removed edge"),
+    ]
+    ax.legend(handles=legend_handles, loc="upper left", fontsize=7, framealpha=0.8)
+
     ax.axis("off")
+
 
 
 # ---------------------------------------------------------------------
@@ -598,15 +627,63 @@ def plot_simulation(history, sim_type: str = None, save_path: str = None):
         plt.ylabel("Number of nodes")
 
     elif sim_type == "sirs":
+        # Compute series
         rounds, new_infections, cum_ever, deaths_cum = _compute_sirs_series(history)
 
+
+        # Current infected at each step
+        current_infected = [len(history[t]["I"]) for t in rounds]
+
+        # Current recovered at each step
+        current_recovered = [len(history[t]["R"]) for t in rounds]
+
         plt.figure(figsize=(8, 5))
-        plt.plot(rounds, new_infections, marker="o", label="New infections per step")
-        plt.plot(rounds, cum_ever, marker="s", linestyle="--", label="Cumulative ever infected")
-        plt.plot(rounds, deaths_cum, marker="^", linestyle="-.", label="Cumulative deaths")
-        plt.title("SIRS Infection Dynamics")
-        plt.xlabel("Time step")
-        plt.ylabel("Number of nodes")
+
+        # New infections per step (orange)
+        plt.plot(
+            rounds,
+            new_infections,
+            marker="o",
+            color="orange",
+            label="Daily Infections",
+        )
+
+        # Current infected (red)
+        plt.plot(
+            rounds,
+            current_infected,
+            marker="s",
+            linestyle="-",
+            color="red",
+            label="Current infected",
+        )
+
+        # Current recovered (blue)
+        plt.plot(
+            rounds,
+            current_recovered,
+            marker="D",
+            linestyle="-",
+            color="blue",
+            label="Current Recovered",
+        )
+
+        # Cumulative deaths (black)
+        plt.plot(
+            rounds,
+            deaths_cum,
+            marker="^",
+            linestyle="-.",
+            color="black",
+            label="Cumulative deaths",
+        )
+
+        plt.title("COVID Simulation Statistics")
+        plt.xlabel("Day")
+        plt.ylabel("Number of individuals")
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+
 
     else:
         raise ValueError(f"Unknown sim_type '{sim_type}'. Use 'cascade' or 'sirs'.")

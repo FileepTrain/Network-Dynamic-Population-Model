@@ -37,7 +37,7 @@ def load_gml(path: str) -> nx.DiGraph:
     return G
 
 # ---------------------------------------------------------------------
-# FILE HANDLING
+# Helper Functions
 # ---------------------------------------------------------------------
 def run_covid_simulation(G: nx.Graph, initiators, args):
     """
@@ -134,6 +134,96 @@ def run_covid_simulation(G: nx.Graph, initiators, args):
         removed_edges,
     )
 
+def print_sirs_settings(args, initiators):
+    """
+    Print all SIRS simulation settings and whether each was user-provided or default.
+    """
+
+    def setting(name, value, provided):
+        tag = "user" if provided else "default"
+        print(f"{name:<38} {value:<10} ({tag})")
+
+    print("\n=== COVID / SIRS SIMULATION SETTINGS ===")
+
+    setting(
+        "Probability of infection:",
+        args.probability_of_infection if args.probability_of_infection is not None else 0.03,
+        args.probability_of_infection is not None
+    )
+
+    setting(
+        "Probability of death:",
+        args.probability_of_death if args.probability_of_death is not None else 0.01,
+        args.probability_of_death is not None
+    )
+
+    setting(
+        "Infection duration:",
+        args.infection_duration if args.infection_duration is not None else 7,
+        args.infection_duration is not None
+    )
+
+    setting(
+        "Simulation lifespan (max_steps):",
+        args.lifespan if args.lifespan is not None else 100,
+        args.lifespan is not None
+    )
+
+    setting(
+        "Resusceptibility (R→S):",
+        args.resusceptibility if args.resusceptibility is not None else 0.01,
+        args.resusceptibility is not None
+    )
+
+    setting(
+        "Vaccination rate:",
+        args.vaccination if args.vaccination is not None else 0.0,
+        args.vaccination is not None
+    )
+
+    setting(
+        "Vaccination effectiveness:",
+        args.vaccination_effectiveness if args.vaccination_effectiveness is not None else 0.70,
+        args.vaccination_effectiveness is not None
+    )
+
+    setting(
+        "Shelter fraction:",
+        args.shelter if args.shelter is not None else 0.0,
+        args.shelter is not None
+    )
+
+    setting(
+        "Shelter effectiveness:",
+        args.shelter_effectiveness if args.shelter_effectiveness is not None else 1.0,
+        args.shelter_effectiveness is not None
+    )
+
+    print(f"{'Initial seeds:':<38} {initiators}")
+    print("=========================================\n")
+
+def print_sirs_results(history, vaccinated, sheltered, infected_ever, final_I, final_R, final_D):
+    """
+    Print outcomes of the SIRS simulation, including average daily infected.
+    """
+
+    # Average number of currently infected per day across the whole simulation
+    if history:
+        total_infected_over_time = sum(len(state["I"]) for state in history)
+        avg_daily_infected = total_infected_over_time / len(history)
+    else:
+        avg_daily_infected = 0.0
+
+    print("\n=== COVID / SIRS SIMULATION RESULTS ===")
+    print(f"{'Sheltered nodes:':<38} {len(sheltered)}")
+    print(f"{'Vaccinated nodes:':<38} {len(vaccinated)}")
+    print(f"{'Total ever infected:':<38} {len(infected_ever)}")
+    print(f"{'Final infected (I):':<38} {len(final_I)}")
+    print(f"{'Final recovered (R):':<38} {len(final_R)}")
+    print(f"{'Final deceased (D):':<38} {len(final_D)}")
+    print(f"{'Average daily infected:':<38} {avg_daily_infected:.2f}")
+    print("=========================================\n")
+
 
 # ---------------------------------------------------------------------
 # ARGUMENT PARSER
@@ -199,9 +289,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Death probability q (0–1) while infected",
     )
     parser.add_argument(
-    "--infection_duration",
-    type=int,
-    help="How long (in steps) an infected node remains infected before recovering.",
+        "--infection_duration",
+        type=int,
+        help="How long (in steps) an infected node remains infected before recovering.",
     )
     parser.add_argument(
         "--shelter",
@@ -227,9 +317,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Effectiveness of vaccination (0–1). 1 = fully effective (no infection), 0 = no effect.",
     )
     parser.add_argument(
-    "--resusceptibility",
-    type=float,
-    help="Probability (0–1) that a recovered node becomes susceptible again each step (R→S).",
+        "--resusceptibility",
+        type=float,
+        help="Probability (0–1) that a recovered node becomes susceptible again each step (R→S).",
     )
 
 
@@ -307,7 +397,7 @@ def main():
 
         # Interactive visualization
         if args.interactive:
-            interactive_simulation(G, history, sim_type="cascade", vaccinated=vaccinated)
+            interactive_simulation(G, history, sim_type="cascade")
 
         # Plot curve
         if args.plot:
@@ -341,16 +431,8 @@ def main():
             args=args,
         )
 
-        # Print basic outcomes
-        print("\n=== COVID / SIRS SIMULATION RESULT ===")
-        print(f"Sheltered nodes (edges removed):           {len(sheltered)}")
-        print(f"Vaccinated nodes:                          {len(vaccinated)}")
-        print(f"Vaccination effectiveness: {getattr(args, 'vaccination_effectiveness', None)}")
-        print(f"Total ever infected:                      {len(infected_ever)}")
-        print(f"Final infected (I):                       {len(final_I)}")
-        print(f"Final deceased (D):                       {len(final_D)}")
-        print(f"Final recovered/removed (R):              {len(final_R) + len(final_D)}")
-        print("=====================================\n")
+        # print settings
+        print_sirs_settings(args, initiators)
 
         # Interactive visualization
         if args.interactive:
@@ -361,29 +443,23 @@ def main():
                 vaccinated=vaccinated,
                 sheltered=sheltered,
                 removed_edges=removed_edges,
-    )
+        )
 
         # Plot curve
         if args.plot:
             plot_simulation(history, sim_type="sirs", save_path="sirs_curve.png")
+            
+        #print results
+        print_sirs_results(
+            history,
+            vaccinated,
+            sheltered,
+            infected_ever,
+            final_I,
+            final_R,
+            final_D,
+        )
 
-    # ------------------------------------------------------------
-    # Print argument diagnostics for grading
-    # ------------------------------------------------------------
-    print("============ ARGUMENTS CHECK ============")
-    print(f"Graph file:          {args.graph_file}")
-    print(f"Loaded graph:        {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
-    print(f"Action:              {args.action}")
-    print(f"Initiators:          {initiators}")
-    print(f"Threshold:           {args.threshold}")
-    print(f"P(infection):        {args.probability_of_infection}")
-    print(f"P(death):            {args.probability_of_death}")
-    print(f"Lifespan:            {args.lifespan}")
-    print(f"Shelter:             {args.shelter}")
-    print(f"Vaccination:         {args.vaccination}")
-    print(f"Interactive:         {args.interactive}")
-    print(f"Plot:                {args.plot}")
-    print("=========================================")
 
 
 if __name__ == "__main__":
