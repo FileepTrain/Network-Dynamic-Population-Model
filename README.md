@@ -23,7 +23,7 @@
 
 --interactive: plot a graph and state of nodes for each round
 
---plot: plot the number of new infections per day when simulation is
+--plot: plot the social network (new infections, deaths, and recoveries) per day
 
 ## Sample Command-Line Usage
 

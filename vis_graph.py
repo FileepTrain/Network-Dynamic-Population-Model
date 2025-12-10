@@ -1,12 +1,13 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+from typing import Any, Dict, Iterable, List, Set
 
 
 # ---------------------------------------------------------------------
 # TYPE INFERENCE
 # ---------------------------------------------------------------------
-def _infer_sim_type(history, sim_type):
+def _infer_sim_type(history, sim_type: str | None):
     """
     Infer sim_type from history if not explicitly provided.
 
@@ -14,418 +15,96 @@ def _infer_sim_type(history, sim_type):
     - 'sirs' if history[0] is a dict with keys S, I, R (and optionally D)
     """
     if sim_type is not None:
-        return sim_type.lower()
+        return sim_type
 
     if not history:
-        raise ValueError("Cannot infer sim_type from empty history.")
+        raise ValueError("Empty history; cannot infer sim_type.")
 
     first = history[0]
+
+    # Cascade: history is a list of sets (active/activated nodes)
     if isinstance(first, set):
         return "cascade"
-    if isinstance(first, dict) and all(k in first for k in ("S", "I", "R")):
-        return "sirs"
+
+    # SIRS: history is a list of dicts with S, I, R, optionally D
+    if isinstance(first, dict):
+        keys = set(first.keys())
+        if {"S", "I", "R"}.issubset(keys):
+            return "sirs"
 
     raise ValueError(
         "Could not infer sim_type from history. "
-        "Pass sim_type='cascade' or sim_type='sirs' explicitly."
+        "Provide sim_type='cascade' or 'sirs' explicitly."
     )
 
 
 # ---------------------------------------------------------------------
-# DRAW HELPERS (ONE FRAME)
+# TIME SERIES PLOT
 # ---------------------------------------------------------------------
-def _draw_cascade_frame(G, pos, ax, newly_infected, infected_so_far, round_idx):
-    """Draw a single cascade frame."""
-    ax.clear()
+def _extract_series_sirs(history: List[Dict[str, Set[Any]]]):
+    S_counts = []
+    I_counts = []
+    R_counts = []
+    D_counts = []
 
-    node_colors = []
-    for n in G.nodes():
-        if n in newly_infected:
-            node_colors.append("darkred")      # new this round
-        elif n in infected_so_far:
-            node_colors.append("salmon")       # previously infected
-        else:
-            node_colors.append("lightgray")    # never infected
+    for state in history:
+        S_counts.append(len(state.get("S", set())))
+        I_counts.append(len(state.get("I", set())))
+        R_counts.append(len(state.get("R", set())))
+        D_counts.append(len(state.get("D", set())))
 
-    nx.draw_networkx_edges(
-        G, pos,
-        edge_color="lightgray",
-        width=1.5,
-        alpha=0.7,
-        ax=ax
-    )
-    nx.draw_networkx_nodes(
-        G, pos,
-        node_color=node_colors,
-        node_size=450,
-        ax=ax
-    )
-    nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
-
-    ax.set_title(
-        f"Round {round_idx} | New: {len(newly_infected)} | Total infected: {len(infected_so_far)}"
-    )
-    ax.axis("off")
+    t = np.arange(len(history))
+    return t, np.array(S_counts), np.array(I_counts), np.array(R_counts), np.array(D_counts)
 
 
-def _draw_cascade_final(G, pos, ax, infected_so_far):
-    """Draw final cascade summary frame."""
-    ax.clear()
-    final_colors = [
-        "salmon" if n in infected_so_far else "lightgray"
-        for n in G.nodes()
-    ]
-
-    nx.draw_networkx_edges(
-        G, pos,
-        edge_color="lightgray",
-        width=1.5,
-        alpha=0.7,
-        ax=ax
-    )
-    nx.draw_networkx_nodes(
-        G, pos,
-        node_color=final_colors,
-        node_size=450,
-        ax=ax
-    )
-    nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
-
-    ax.set_title(f"Final infection state | Total infected: {len(infected_so_far)}")
-    ax.axis("off")
+def _extract_series_cascade(history: List[Set[Any]]):
+    active_counts = [len(step) for step in history]
+    t = np.arange(len(history))
+    return t, np.array(active_counts)
 
 
-def _draw_sirs_frame(G, pos, ax, state, step_idx):
-    """Draw a single SIRS frame (supports optional death state D)."""
-    S = state["S"]
-    I = state["I"]
-    R = state["R"]
-    D = state.get("D", set())
-
-    ax.clear()
-
-    node_colors = []
-    for n in G.nodes():
-        if n in D:
-            node_colors.append("black")       # dead
-        elif n in I:
-            node_colors.append("red")         # infected
-        elif n in R:
-            node_colors.append("green")       # recovered/immune
-        else:
-            node_colors.append("lightgray")   # susceptible
-
-    nx.draw_networkx_edges(
-        G,
-        pos,
-        edge_color="lightgray",
-        width=1.5,
-        alpha=0.7,
-        ax=ax,
-    )
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        node_color=node_colors,
-        node_size=450,
-        ax=ax,
-    )
-    nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
-
-    ax.set_title(
-        f"Step {step_idx} | S={len(S)}  I={len(I)}  R={len(R)}  D={len(D)} (SIRS)"
-    )
-    ax.axis("off")
-
-
-def _draw_sirs_final(G, pos, ax, final_state):
-    """Draw final SIRS summary frame (supports optional death state D)."""
-    final_S = final_state["S"]
-    final_I = final_state["I"]
-    final_R = final_state["R"]
-    final_D = final_state.get("D", set())
-
-    ax.clear()
-    final_colors = []
-    for n in G.nodes():
-        if n in final_D:
-            final_colors.append("black")
-        elif n in final_I:
-            final_colors.append("red")
-        elif n in final_R:
-            final_colors.append("green")
-        else:
-            final_colors.append("lightgray")
-
-    nx.draw_networkx_edges(
-        G,
-        pos,
-        edge_color="lightgray",
-        width=1.5,
-        alpha=0.7,
-        ax=ax,
-    )
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        node_color=final_colors,
-        node_size=450,
-        ax=ax,
-    )
-    nx.draw_networkx_labels(G, pos, font_size=8, ax=ax)
-
-    ax.set_title(
-        f"Final SIRS State | S={len(final_S)}  I={len(final_I)}  R={len(final_R)}  D={len(final_D)}"
-    )
-    ax.axis("off")
-
-
-# ---------------------------------------------------------------------
-# INTERACTIVE RUNNERS (PER SIM TYPE)
-# ---------------------------------------------------------------------
-def _run_interactive_cascade(G, history, pos, fig, ax, save_prefix):
-    print("\nInteractive Cascade Viewer")
-    print("Press ENTER for next round, or type 'q' then ENTER to quit.\n")
-
-    infected_so_far = set()
-
-    for r, newly_infected in enumerate(history):
-        infected_so_far |= newly_infected
-
-        # draw frame
-        _draw_cascade_frame(G, pos, ax, newly_infected, infected_so_far, r)
-
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        plt.pause(0.001)
-
-        if save_prefix is not None:
-            fig.savefig(f"{save_prefix}_round{r}.png", bbox_inches="tight")
-
-        # terminal output
-        print(f"[Round {r}]")
-        print(f"  Newly infected ({len(newly_infected)}): {sorted(newly_infected)}")
-        print(f"  Total infected so far: {len(infected_so_far)}\n")
-
-        user_input = input(
-            f"Round {r} shown. Press ENTER for next, or 'q' then ENTER to quit: "
-        ).strip().lower()
-        if user_input == "q":
-            print("Exiting interactive cascade viewer early.")
-            break
-
-    # final frame
-    _draw_cascade_final(G, pos, ax, infected_so_far)
-    fig.canvas.draw()
-    fig.canvas.flush_events()
-    plt.pause(0.001)
-
-    if save_prefix is not None:
-        fig.savefig(f"{save_prefix}_final.png", bbox_inches="tight")
-
-
-def _run_interactive_sirs(G, history, pos, fig, ax, save_prefix):
-    print("\nInteractive SIRS Viewer")
-    print("Press ENTER for next step, or type 'q' then ENTER to quit.\n")
-
-    last_state = history[-1]
-
-    for t, state in enumerate(history):
-        S = state["S"]
-        I = state["I"]
-        R = state["R"]
-        D = state.get("D", set())
-
-        # draw frame
-        _draw_sirs_frame(G, pos, ax, state, t)
-
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        plt.pause(0.001)
-
-        if save_prefix is not None:
-            fig.savefig(f"{save_prefix}_t{t}.png", bbox_inches="tight")
-
-        # terminal output
-        if t == 0:
-            prev_I = set()
-            prev_R = set()
-            prev_D = set()
-        else:
-            prev_I = history[t - 1]["I"]
-            prev_R = history[t - 1]["R"]
-            prev_D = history[t - 1].get("D", set())
-
-        # newly infected: in current I but not previously I/R/D
-        new_infections = I - prev_I - prev_R - prev_D
-
-        # newly dead: in current D but not previous D
-        new_deaths = D - prev_D
-
-        # newly recovered (optional, useful with explicit R vs D)
-        new_recoveries = R - prev_R
-
-        print(f"[Step {t}]")
-        print(f"  S = {len(S)}, I = {len(I)}, R = {len(R)}, D = {len(D)}")
-        print(
-            f"  New infections this step: {len(new_infections)}"
-            f" -> {sorted(new_infections)}"
-        )
-        print(
-            f"  New recoveries this step: {len(new_recoveries)}"
-            f" -> {sorted(new_recoveries)}"
-        )
-        print(
-            f"  New deaths this step:     {len(new_deaths)}"
-            f" -> {sorted(new_deaths)}\n"
-        )
-
-        if t < len(history) - 1:
-            user_input = input(
-                f"Step {t} shown. Press ENTER for next, or 'q' then ENTER to quit: "
-            ).strip().lower()
-            if user_input == "q":
-                print("Exiting interactive SIRS viewer early.")
-                break
-
-    _draw_sirs_final(G, pos, ax, last_state)
-    fig.canvas.draw()
-    fig.canvas.flush_events()
-    plt.pause(0.001)
-
-    if save_prefix is not None:
-        fig.savefig(f"{save_prefix}_final.png", bbox_inches="tight")
-
-
-# ---------------------------------------------------------------------
-# PUBLIC: INTERACTIVE SIMULATION
-# ---------------------------------------------------------------------
-def interactive_simulation(G: nx.Graph, history, sim_type: str = None, save_prefix: str = None):
+def plot_simulation(
+    history,
+    sim_type: str | None = None,
+    save_path: str | None = None,
+):
     """
-    Unified interactive visualization.
+    Plot high-level time series for a cascade or SIRS simulation.
 
-    For 'cascade':
-        history[r] = set of newly infected nodes at round r.
-
-    For 'sirs':
-        history[t] = {'S': set(...), 'I': set(...), 'R': set(...)}
-                     or {'S': ..., 'I': ..., 'R': ..., 'D': ...}.
+    Parameters
+    ----------
+    history : list
+        For 'cascade': list of sets (activated nodes at each step).
+        For 'sirs': list of dicts with keys "S", "I", "R", "D".
+    sim_type : {'cascade', 'sirs'}, optional
+        If None, inferred automatically from history.
+    save_path : str, optional
+        If provided, figure is saved to this path.
     """
-    if not history:
-        print("[interactive_simulation] Empty history; nothing to display.")
-        return
-
-    sim_type = _infer_sim_type(history, sim_type)
-    pos = nx.spring_layout(G, seed=42)
-
-    plt.ion()
-    fig, ax = plt.subplots(figsize=(7, 7))
-
-    if sim_type == "cascade":
-        _run_interactive_cascade(G, history, pos, fig, ax, save_prefix)
-    elif sim_type == "sirs":
-        _run_interactive_sirs(G, history, pos, fig, ax, save_prefix)
-    else:
-        raise ValueError(f"Unknown sim_type '{sim_type}'. Use 'cascade' or 'sirs'.")
-
-    plt.ioff()
-
-    # Allow user to close from terminal instead of GUI
-    print("Interactive visualization complete. Press ENTER to close the plot window(s).")
-    input()
-    plt.close("all")
-
-
-# ---------------------------------------------------------------------
-# PLOTTING HELPERS (TIME SERIES)
-# ---------------------------------------------------------------------
-def _compute_cascade_series(history):
-    """Return (rounds, new_counts, cum_counts) for cascade."""
-    new_counts = [len(s) for s in history]
-    cum_counts = list(np.cumsum(new_counts))
-    rounds = list(range(len(history)))
-    return rounds, new_counts, cum_counts
-
-
-def _compute_sirs_series(history):
-    """
-    Return (rounds, new_infections, cum_ever, deaths_cum) for SIRS.
-
-    - new_infections[t]: newly infected at step t
-    - cum_ever[t]: number of nodes ever infected/affected by step t
-    - deaths_cum[t]: cumulative deaths = |D_t| (or |R_t| if D not present)
-    """
-    T = len(history)
-    rounds = list(range(T))
-
-    new_infections = []
-    cum_ever = []
-    deaths_cum = []
-
-    ever = set()
-
-    for t in range(T):
-        I_t = history[t]["I"]
-        R_t = history[t]["R"]
-        # If 'D' is missing (old runs), treat D_t as R_t for compatibility
-        D_t = history[t].get("D", R_t)
-
-        if t == 0:
-            new_t = set(I_t)  # seeds at time 0
-        else:
-            prev_I = history[t - 1]["I"]
-            prev_R = history[t - 1]["R"]
-            prev_D = history[t - 1].get("D", set())
-            new_t = I_t - prev_I - prev_R - prev_D
-
-        ever |= I_t | R_t | D_t
-        new_infections.append(len(new_t))
-        cum_ever.append(len(ever))
-        deaths_cum.append(len(D_t))   # cumulative deaths
-
-    return rounds, new_infections, cum_ever, deaths_cum
-
-
-# ---------------------------------------------------------------------
-# PUBLIC: TIME-SERIES PLOT
-# ---------------------------------------------------------------------
-def plot_simulation(history, sim_type: str = None, save_path: str = None):
-    """
-    Unified plotting function.
-
-    For 'cascade':
-        history[r] = set of newly infected nodes at round r.
-
-    For 'sirs':
-        history[t] = {'S': set(...), 'I': set(...), 'R': set(...)}
-                     or {'S': ..., 'I': ..., 'R': ..., 'D': ...}.
-    """
-    if not history:
-        print("[plot_simulation] Empty history; nothing to plot.")
-        return
-
     sim_type = _infer_sim_type(history, sim_type)
 
+    plt.figure(figsize=(8, 5))
+
     if sim_type == "cascade":
-        rounds, new_counts, cum_counts = _compute_cascade_series(history)
-
-        plt.figure(figsize=(8, 5))
-        plt.plot(rounds, new_counts, marker="o", label="New infections")
-        plt.plot(rounds, cum_counts, marker="s", linestyle="--", label="Cumulative infections")
-        plt.title("Cascade Infection / Adoption over Time")
-        plt.xlabel("Round")
-        plt.ylabel("Number of nodes")
-
-    elif sim_type == "sirs":
-        rounds, new_infections, cum_ever, deaths_cum = _compute_sirs_series(history)
-
-        plt.figure(figsize=(8, 5))
-        plt.plot(rounds, new_infections, marker="o", label="New infections per step")
-        plt.plot(rounds, cum_ever, marker="s", linestyle="--", label="Cumulative ever infected")
-        plt.plot(rounds, deaths_cum, marker="^", linestyle="-.", label="Cumulative deaths")
-        plt.title("SIRS Infection Dynamics")
+        t, active_counts = _extract_series_cascade(history)
+        plt.plot(t, active_counts, marker="o", label="Active / Adopted")
         plt.xlabel("Time step")
-        plt.ylabel("Number of nodes")
+        plt.ylabel("# Active nodes")
+        plt.title("Cascade simulation over time")
+
+    elif sim_type == "sirs":
+        t, S_counts, I_counts, R_counts, D_counts = _extract_series_sirs(history)
+        plt.plot(t, S_counts, marker="o", label="S (susceptible)")
+        plt.plot(t, I_counts, marker="o", label="I (infected)")
+        plt.plot(t, R_counts, marker="o", label="R (recovered/immune)")
+
+        # Only plot D if there are any deaths
+        if np.any(D_counts > 0):
+            plt.plot(t, D_counts, marker="o", label="D (dead)")
+
+        plt.xlabel("Time step")
+        plt.ylabel("# Nodes")
+        plt.title("SIRS epidemic simulation over time")
 
     else:
         raise ValueError(f"Unknown sim_type '{sim_type}'. Use 'cascade' or 'sirs'.")
@@ -441,3 +120,116 @@ def plot_simulation(history, sim_type: str = None, save_path: str = None):
     print("Plot displayed. Press ENTER to close the plot window(s).")
     input()
     plt.close("all")
+
+
+# ---------------------------------------------------------------------
+# INTERACTIVE NETWORK VIEW
+# ---------------------------------------------------------------------
+def _draw_state_cascade(G: nx.Graph, active: Set[Any], pos: Dict[Any, Any]):
+    colors = []
+    for node in G.nodes():
+        if node in active:
+            colors.append("tab:red")
+        else:
+            colors.append("lightgray")
+
+    nx.draw_networkx(
+        G,
+        pos=pos,
+        with_labels=True,
+        node_color=colors,
+        node_size=400,
+        font_size=8,
+    )
+
+
+def _draw_state_sirs(G: nx.Graph, state: Dict[str, Set[Any]], pos: Dict[Any, Any]):
+    S = state.get("S", set())
+    I = state.get("I", set())
+    R = state.get("R", set())
+    D = state.get("D", set())
+
+    colors = []
+    for node in G.nodes():
+        if node in D:
+            colors.append("black")
+        elif node in I:
+            colors.append("tab:red")
+        elif node in R:
+            colors.append("tab:green")
+        elif node in S:
+            colors.append("tab:blue")
+        else:
+            colors.append("lightgray")
+
+    nx.draw_networkx(
+        G,
+        pos=pos,
+        with_labels=True,
+        node_color=colors,
+        node_size=400,
+        font_size=8,
+    )
+
+
+def interactive_simulation(
+    G: nx.Graph,
+    history,
+    sim_type: str | None = None,
+    layout: Dict[Any, Any] | None = None,
+):
+    """
+    Step through a simulation history on the network.
+
+    At each step, a network plot is shown. Press ENTER to go to the next step;
+    type 'q' + ENTER to quit.
+
+    Parameters
+    ----------
+    G : nx.Graph
+        The underlying network.
+    history : list
+        For 'cascade': list of sets (activated nodes at each step).
+        For 'sirs': list of dicts with keys S, I, R, D.
+    sim_type : {'cascade', 'sirs'}, optional
+        If None, inferred from history.
+    layout : dict, optional
+        Precomputed node positions. If None, spring_layout is used.
+    """
+    sim_type = _infer_sim_type(history, sim_type)
+
+    if layout is None:
+        layout = nx.spring_layout(G, seed=42)
+
+    num_steps = len(history)
+    if num_steps == 0:
+        print("Empty history; nothing to display.")
+        return
+
+    for t, state in enumerate(history):
+        plt.figure(figsize=(6, 5))
+        plt.title(f"{sim_type.upper()} simulation – step {t}")
+
+        if sim_type == "cascade":
+            _draw_state_cascade(G, state, layout)
+        elif sim_type == "sirs":
+            _draw_state_sirs(G, state, layout)
+        else:
+            raise ValueError(f"Unknown sim_type '{sim_type}'.")
+
+        plt.axis("off")
+        plt.tight_layout()
+        plt.show(block=False)
+
+        if t < num_steps - 1:
+            user_input = input(
+                f"Step {t}/{num_steps - 1}. Press ENTER for next, or 'q' + ENTER to quit: "
+            ).strip().lower()
+            plt.close()
+            if user_input == "q":
+                break
+        else:
+            print("Reached final step. Press ENTER to close.")
+            input()
+            plt.close()
+            break
